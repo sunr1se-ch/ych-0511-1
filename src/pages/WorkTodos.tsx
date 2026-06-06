@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { X, Upload, Clock, MapPin, Droplets, User, FileText } from 'lucide-react';
+import { X, Upload, Clock, MapPin, Droplets, User, FileText, ArrowLeft, AlertCircle } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
 import { useAuthStore } from '../store/authStore';
 import { api } from '../utils/api';
@@ -160,30 +161,70 @@ function CompleteModal({ order, onClose, onSuccess }: Props) {
 }
 
 export default function WorkTodos() {
-  const { workOrders, fetchWorkOrders, loading } = useAppStore();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const filterFieldId = searchParams.get('fieldId');
+  const filterFieldCode = searchParams.get('fieldCode');
+
+  const { workOrders, loading, fetchWorkOrders, refreshAll } = useAppStore();
   const { user } = useAuthStore();
   const [selectedOrder, setSelectedOrder] = useState<WorkOrder | null>(null);
+
   useEffect(() => {
-    fetchWorkOrders('pending');
-  }, [fetchWorkOrders]);
+    if (workOrders.length === 0) {
+      fetchWorkOrders('pending');
+    }
+  }, [workOrders.length, fetchWorkOrders]);
 
   const pendingOrders = workOrders.filter(o => o.status === 'pending');
 
+  const displayOrders = filterFieldId
+    ? pendingOrders.filter(o => o.fieldId === parseInt(filterFieldId))
+    : pendingOrders;
+
   const handleComplete = async () => {
     setSelectedOrder(null);
-    fetchWorkOrders('pending');
+    await Promise.all([
+      fetchWorkOrders('pending'),
+      refreshAll(),
+    ]);
   };
 
-  const displayOrders = pendingOrders;
+  const handleBack = () => {
+    navigate('/dashboard');
+  };
+
+  const showFieldFilterHint = filterFieldId && displayOrders.length === 0 && pendingOrders.length > 0;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">工单待办</h1>
-          <p className="text-gray-500 mt-1">
-            待处理：{pendingOrders.length} 个
-          </p>
+        <div className="flex items-center gap-3">
+          {filterFieldId && (
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-field hover:bg-field/5 rounded-lg transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              返回
+            </button>
+          )}
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              工单待办
+              {filterFieldCode && (
+                <span className="text-lg font-normal text-field ml-2">
+                  - {decodeURIComponent(filterFieldCode)}
+                </span>
+              )}
+            </h1>
+            <p className="text-gray-500 mt-1">
+              {filterFieldId
+                ? `该晒场待处理：${displayOrders.length} 个（共 ${pendingOrders.length} 个）`
+                : `待处理：${pendingOrders.length} 个`
+              }
+            </p>
+          </div>
         </div>
       </div>
 
@@ -196,84 +237,108 @@ export default function WorkTodos() {
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
             <FileText className="w-8 h-8 text-green-600" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">暂无待办工单</h3>
-          <p className="text-gray-500">所有工单已处理完毕，继续保持！</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {filterFieldId ? `该晒场暂无待办工单` : '暂无待办工单'}
+          </h3>
+          <p className="text-gray-500 mb-2">
+            {filterFieldId && pendingOrders.length > 0
+              ? '该晒场当前没有待处理的工单，其他晒场仍有待办。'
+              : '所有工单已处理完毕，继续保持！'
+            }
+          </p>
+          <div className="flex items-center justify-center gap-2 text-sm text-gray-400 mt-4">
+            <AlertCircle className="w-4 h-4" />
+            <span>连续三次超上限才开立工单</span>
+          </div>
         </div>
       ) : (
-        <div className="space-y-4">
-          {displayOrders.map(order => {
-            const pendingMinutes = getDurationMinutes(order.triggeredAt);
-            const isUrgent = pendingMinutes > 60;
+        <>
+          {showFieldFilterHint && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 text-blue-700">
+                <AlertCircle className="w-5 h-5" />
+                <span className="text-sm">
+                  当前筛选显示「{decodeURIComponent(filterFieldCode || '')}」的工单，
+                  点击「返回」查看全部待办
+                </span>
+              </div>
+            </div>
+          )}
+          <div className="space-y-4">
+            {displayOrders.map(order => {
+              const pendingMinutes = getDurationMinutes(order.triggeredAt);
+              const isUrgent = pendingMinutes > 60;
 
-            return (
-              <div
-                key={order.id}
-                className={`bg-white rounded-xl border-l-4 shadow-sm hover:shadow-md transition-shadow ${getStatusBorderColor(order.status)}`}
-              >
-                <div className="p-5">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-lg bg-field/10 flex items-center justify-center">
-                        <MapPin className="w-6 h-6 text-field" />
+              return (
+                <div
+                  key={order.id}
+                  className={`bg-white rounded-xl border-l-4 shadow-sm hover:shadow-md transition-shadow ${getStatusBorderColor(order.status)}`}
+                >
+                  <div className="p-5">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-lg bg-field/10 flex items-center justify-center">
+                          <MapPin className="w-6 h-6 text-field" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-lg">{order.fieldCode}</div>
+                          <div className="text-sm text-gray-500">
+                            触发时间：{formatDateTime(order.triggeredAt)}
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="font-semibold text-lg">{order.fieldCode}</div>
+                      <div className="text-right">
+                        {isUrgent && order.status === 'pending' && (
+                          <span className="inline-block px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded mb-2">
+                            紧急
+                          </span>
+                        )}
                         <div className="text-sm text-gray-500">
-                          触发时间：{formatDateTime(order.triggeredAt)}
+                          已等待 <span className={`font-semibold ${isUrgent ? 'text-red-600' : 'text-gray-700'}`}>
+                            {Math.floor(pendingMinutes / 60)}小时{pendingMinutes % 60}分钟
+                          </span>
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      {isUrgent && order.status === 'pending' && (
-                        <span className="inline-block px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded mb-2">
-                          紧急
-                        </span>
-                      )}
-                      <div className="text-sm text-gray-500">
-                        已等待 <span className={`font-semibold ${isUrgent ? 'text-red-600' : 'text-gray-700'}`}>
-                          {Math.floor(pendingMinutes / 60)}小时{pendingMinutes % 60}分钟
-                        </span>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <div className="text-xs text-gray-500 mb-1">平均湿度</div>
+                        <div className="font-semibold text-red-600">{order.humidityAvg.toFixed(1)}%</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <div className="text-xs text-gray-500 mb-1">工单状态</div>
+                        <div className="font-semibold text-amber-600">{getStatusText(order.status)}</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <div className="text-xs text-gray-500 mb-1">处理人</div>
+                        <div className="font-semibold text-gray-700">
+                          {order.operatorName || user?.name || '--'}
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <div className="text-xs text-gray-500 mb-1">工单号</div>
+                        <div className="font-semibold text-gray-700">#{order.id.toString().padStart(4, '0')}</div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="text-xs text-gray-500 mb-1">平均湿度</div>
-                      <div className="font-semibold text-red-600">{order.humidityAvg.toFixed(1)}%</div>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="text-xs text-gray-500 mb-1">工单状态</div>
-                      <div className="font-semibold text-amber-600">{getStatusText(order.status)}</div>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="text-xs text-gray-500 mb-1">处理人</div>
-                      <div className="font-semibold text-gray-700">
-                        {order.operatorName || user?.name || '--'}
+                    {order.status === 'pending' && (
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setSelectedOrder(order)}
+                          className="flex-1 bg-field hover:bg-field-dark text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                          <User className="w-5 h-5" />
+                          登记完成
+                        </button>
                       </div>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="text-xs text-gray-500 mb-1">工单号</div>
-                      <div className="font-semibold text-gray-700">#{order.id.toString().padStart(4, '0')}</div>
-                    </div>
+                    )}
                   </div>
-
-                  {order.status === 'pending' && (
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => setSelectedOrder(order)}
-                        className="flex-1 bg-field hover:bg-field-dark text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                      >
-                        <User className="w-5 h-5" />
-                        登记完成
-                      </button>
-                    </div>
-                  )}
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {selectedOrder && (

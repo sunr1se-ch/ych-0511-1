@@ -1,3 +1,13 @@
+export const FIELD_COLORS = [
+  { main: '#2d5a27', light: '#4a7c42', bg: 'rgba(45, 90, 39, 0.1)' },
+  { main: '#2563eb', light: '#3b82f6', bg: 'rgba(37, 99, 235, 0.1)' },
+  { main: '#dc2626', light: '#ef4444', bg: 'rgba(220, 38, 38, 0.1)' },
+];
+
+export function getFieldColor(index: number) {
+  return FIELD_COLORS[index % FIELD_COLORS.length];
+}
+
 export function formatDateTime(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleString('zh-CN', {

@@ -83,6 +83,11 @@ export const api = {
         method: 'GET',
       });
     },
+    getByTimeRange(fieldId: number, startTime: string, endTime: string): Promise<SensorData[]> {
+      return request<SensorData[]>(`/sensor-data/range?fieldId=${fieldId}&startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime)}`, {
+        method: 'GET',
+      });
+    },
   },
 
   workOrders: {

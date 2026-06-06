@@ -9,10 +9,18 @@ interface AppState {
   loading: boolean;
   error: string | null;
   lastUpdated: Date | null;
+  selectedFieldIds: number[];
+  hiddenLineFieldIds: number[];
   fetchFields: () => Promise<void>;
   fetchWorkOrders: (status?: string, startDate?: string, endDate?: string) => Promise<void>;
-  fetchSensorData: (fieldId: number) => Promise<void>;
+  fetchSensorData: (fieldId: number, hours?: number) => Promise<void>;
+  fetchSensorDataByTimeRange: (fieldId: number, startTime: string, endTime: string) => Promise<SensorData[]>;
   refreshAll: () => Promise<void>;
+  toggleFieldSelection: (fieldId: number) => void;
+  clearFieldSelection: () => void;
+  toggleLineVisibility: (fieldId: number) => void;
+  getPendingCountByFieldId: (fieldId: number) => number;
+  getTotalPendingCount: () => number;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -22,6 +30,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   loading: false,
   error: null,
   lastUpdated: null,
+  selectedFieldIds: [],
+  hiddenLineFieldIds: [],
 
   fetchFields: async () => {
     try {
@@ -43,9 +53,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  fetchSensorData: async (fieldId: number) => {
+  fetchSensorData: async (fieldId: number, hours = 2) => {
     try {
-      const data = await api.sensorData.getByFieldId(fieldId, 2);
+      const data = await api.sensorData.getByFieldId(fieldId, hours);
       set(state => ({
         sensorData: { ...state.sensorData, [fieldId]: data },
       }));
@@ -54,10 +64,60 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  fetchSensorDataByTimeRange: async (fieldId: number, startTime: string, endTime: string) => {
+    try {
+      return await api.sensorData.getByTimeRange(fieldId, startTime, endTime);
+    } catch (error) {
+      console.error('Failed to fetch sensor data by time range:', error);
+      return [];
+    }
+  },
+
   refreshAll: async () => {
+    const { selectedFieldIds, fetchSensorData } = get();
     await Promise.all([
       get().fetchFields(),
       get().fetchWorkOrders(),
+      ...selectedFieldIds.map(id => fetchSensorData(id, 2)),
     ]);
+  },
+
+  toggleFieldSelection: (fieldId: number) => {
+    set(state => {
+      const isSelected = state.selectedFieldIds.includes(fieldId);
+      if (isSelected) {
+        const newSelected = state.selectedFieldIds.filter(id => id !== fieldId);
+        const newHidden = state.hiddenLineFieldIds.filter(id => id !== fieldId);
+        return { selectedFieldIds: newSelected, hiddenLineFieldIds: newHidden };
+      } else {
+        if (state.selectedFieldIds.length >= 3) {
+          return state;
+        }
+        return { selectedFieldIds: [...state.selectedFieldIds, fieldId] };
+      }
+    });
+  },
+
+  clearFieldSelection: () => {
+    set({ selectedFieldIds: [], hiddenLineFieldIds: [] });
+  },
+
+  toggleLineVisibility: (fieldId: number) => {
+    set(state => {
+      const isHidden = state.hiddenLineFieldIds.includes(fieldId);
+      if (isHidden) {
+        return { hiddenLineFieldIds: state.hiddenLineFieldIds.filter(id => id !== fieldId) };
+      } else {
+        return { hiddenLineFieldIds: [...state.hiddenLineFieldIds, fieldId] };
+      }
+    });
+  },
+
+  getPendingCountByFieldId: (fieldId: number) => {
+    return get().workOrders.filter(o => o.fieldId === fieldId && o.status === 'pending').length;
+  },
+
+  getTotalPendingCount: () => {
+    return get().workOrders.filter(o => o.status === 'pending').length;
   },
 }));

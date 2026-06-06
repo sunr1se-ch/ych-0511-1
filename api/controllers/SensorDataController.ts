@@ -17,6 +17,20 @@ export const SensorDataController = {
     res.json({ success: true, data });
   },
 
+  getByTimeRange(req: Request, res: Response<ApiResponse<SensorData[]>>) {
+    const fieldId = parseInt(req.query.fieldId as string);
+    const startTime = req.query.startTime as string;
+    const endTime = req.query.endTime as string;
+
+    if (isNaN(fieldId) || !startTime || !endTime) {
+      res.status(400).json({ success: false, message: '请提供有效的晒场ID和时间范围' });
+      return;
+    }
+
+    const data = SensorDataModel.getByTimeRange(fieldId, startTime, endTime);
+    res.json({ success: true, data });
+  },
+
   create(req: Request, res: Response<ApiResponse<SensorData>>) {
     const { fieldId, humidity } = req.body;
     if (!fieldId || humidity === undefined) {

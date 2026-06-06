@@ -1,21 +1,180 @@
-import { useState, useEffect } from 'react';
-import { Search, Calendar, MapPin, User, Clock, Droplets, ChevronDown, X } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Search, Calendar, MapPin, User, Clock, Droplets, ChevronDown, X, TrendingUp, AlertTriangle } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, ComposedChart } from 'recharts';
 import { useAppStore } from '../store/appStore';
-import { formatDateTime, getStatusText, getStatusColor } from '../utils/format';
-import type { WorkOrder, WorkOrderStatus } from '../../shared/types';
+import { formatDateTime, getStatusText, getStatusColor, formatTime, getFieldColor } from '../utils/format';
+import type { WorkOrder, WorkOrderStatus, SensorData } from '../../shared/types';
+
+interface MiniTrendChartProps {
+  data: SensorData[];
+  threshold: number;
+  triggeredAt: string;
+}
+
+function MiniTrendChart({ data, threshold, triggeredAt }: MiniTrendChartProps) {
+  const color = getFieldColor(0);
+
+  const chartData = useMemo(() => {
+    return data.map(d => ({
+      time: formatTime(d.timestamp),
+      timestamp: d.timestamp,
+      humidity: d.humidity,
+      isOver: d.humidity > threshold,
+      isTriggerPoint: d.timestamp >= triggeredAt,
+    }));
+  }, [data, threshold, triggeredAt]);
+
+  const overData = useMemo(() => {
+    return chartData.map(d => ({
+      ...d,
+      overValue: d.isOver ? d.humidity : null,
+    }));
+  }, [chartData]);
+
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number }>; label?: string }) => {
+    if (!active || !payload || payload.length === 0) return null;
+    const entry = payload[0];
+    const point = chartData.find(d => d.time === label);
+    const isOver = point?.isOver;
+
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-lg text-sm">
+        <p className="text-gray-500">{label}</p>
+        <p className={`font-semibold ${isOver ? 'text-red-600' : 'text-gray-900'}`}>
+          {entry.value.toFixed(1)}%
+          {isOver && ' ⚠ 超标'}
+        </p>
+      </div>
+    );
+  };
+
+  if (data.length === 0) {
+    return (
+      <div className="h-40 bg-gray-50 rounded-lg flex items-center justify-center text-gray-400 text-sm">
+        暂无趋势数据
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <TrendingUp className="w-4 h-4 text-field" />
+          <span>触发前后2小时湿度趋势</span>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-gray-500">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded" style={{ backgroundColor: color.main }} />
+            <span>湿度</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-0.5 bg-red-500" style={{ borderTop: '2px dashed #ef4444' }} />
+            <span>上限 {threshold}%</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded bg-red-200" />
+            <span>超标时段</span>
+          </div>
+        </div>
+      </div>
+      <div className="h-40 bg-gray-50 rounded-lg p-2">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={overData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="overGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#ef4444" stopOpacity={0.05} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis
+              dataKey="time"
+              stroke="#9ca3af"
+              fontSize={10}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              stroke="#9ca3af"
+              fontSize={10}
+              domain={[40, 100]}
+              tickLine={false}
+              axisLine={false}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <ReferenceLine
+              y={threshold}
+              stroke="#ef4444"
+              strokeDasharray="4 4"
+              strokeWidth={1.5}
+            />
+            <Area
+              type="monotone"
+              dataKey="overValue"
+              fill="url(#overGradient)"
+              stroke="none"
+              connectNulls
+            />
+            <Line
+              type="monotone"
+              dataKey="humidity"
+              stroke={color.main}
+              strokeWidth={2}
+              dot={(props: { cx: number; cy: number; payload: { isOver: boolean; isTriggerPoint: boolean } }) => {
+                const { cx, cy, payload } = props;
+                if (payload.isOver) {
+                  return (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={4}
+                      fill="#ef4444"
+                      stroke="#fff"
+                      strokeWidth={1}
+                    />
+                  );
+                }
+                if (payload.isTriggerPoint) {
+                  return (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={5}
+                      fill={color.main}
+                      stroke="#fff"
+                      strokeWidth={2}
+                    />
+                  );
+                }
+                return <circle cx={cx} cy={cy} r={2} fill={color.main} />;
+              }}
+              activeDot={{ r: 6, fill: color.light }}
+              connectNulls
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
 
 export default function WorkHistory() {
-  const { workOrders, fetchWorkOrders, loading } = useAppStore();
+  const { workOrders, fields, fetchWorkOrders, fetchSensorDataByTimeRange, loading } = useAppStore();
   const [filter, setFilter] = useState<WorkOrderStatus | 'all'>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [searchField, setSearchField] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<WorkOrder | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [trendData, setTrendData] = useState<SensorData[]>([]);
+  const [trendLoading, setTrendLoading] = useState(false);
 
   useEffect(() => {
-    loadOrders();
-  }, []);
+    if (workOrders.length === 0) {
+      loadOrders();
+    }
+  }, [workOrders.length]);
 
   const loadOrders = async () => {
     if (startDate && endDate) {
@@ -25,11 +184,35 @@ export default function WorkHistory() {
     }
   };
 
+  const handleSelectOrder = async (order: WorkOrder) => {
+    setSelectedOrder(order);
+    setTrendData([]);
+    setTrendLoading(true);
+
+    try {
+      const triggerTime = new Date(order.triggeredAt);
+      const startTime = new Date(triggerTime.getTime() - 2 * 60 * 60 * 1000).toISOString();
+      const endTime = new Date(triggerTime.getTime() + 2 * 60 * 60 * 1000).toISOString();
+
+      const data = await fetchSensorDataByTimeRange(order.fieldId, startTime, endTime);
+      setTrendData(data);
+    } catch (error) {
+      console.error('Failed to fetch trend data:', error);
+    } finally {
+      setTrendLoading(false);
+    }
+  };
+
   const filteredOrders = workOrders
     .filter(o => filter === 'all' || o.status === filter)
     .filter(o => !searchField || o.fieldCode.toLowerCase().includes(searchField.toLowerCase()));
 
   const completedCount = workOrders.filter(o => o.status === 'completed').length;
+
+  const selectedField = useMemo(() => {
+    if (!selectedOrder) return null;
+    return fields.find(f => f.id === selectedOrder.fieldId);
+  }, [selectedOrder, fields]);
 
   return (
     <div className="space-y-6">
@@ -189,7 +372,7 @@ export default function WorkHistory() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
-                        onClick={() => setSelectedOrder(order)}
+                        onClick={() => handleSelectOrder(order)}
                         className="text-field hover:text-field-dark font-medium text-sm"
                       >
                         详情
@@ -232,6 +415,30 @@ export default function WorkHistory() {
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="text-sm text-gray-500 mb-1">触发湿度</div>
                   <div className="font-semibold text-red-600">{selectedOrder.humidityAvg.toFixed(1)}%</div>
+                </div>
+              </div>
+
+              {trendLoading ? (
+                <div className="h-40 bg-gray-50 rounded-lg flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-3 border-field border-t-transparent"></div>
+                </div>
+              ) : (
+                <MiniTrendChart
+                  data={trendData}
+                  threshold={selectedField?.humidityThreshold || 70}
+                  triggeredAt={selectedOrder.triggeredAt}
+                />
+              )}
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="text-sm font-medium text-amber-800">触发说明</div>
+                    <div className="text-sm text-amber-700 mt-1">
+                      连续三次检测湿度超过上限 {selectedField?.humidityThreshold || 70}% 后自动开立此工单
+                    </div>
+                  </div>
                 </div>
               </div>
 

@@ -17,6 +17,14 @@ export const SensorDataModel = {
     `, [fieldId, `-${hours} hours`]);
   },
 
+  getByTimeRange(fieldId: number, startTime: string, endTime: string): SensorData[] {
+    return query<SensorDataRow>(`
+      SELECT * FROM sensor_data 
+      WHERE field_id = ? AND timestamp >= ? AND timestamp <= ?
+      ORDER BY timestamp ASC
+    `, [fieldId, startTime, endTime]);
+  },
+
   getRecentByFieldId(fieldId: number, limit: number = 3): SensorData[] {
     return query<SensorDataRow>(`
       SELECT * FROM sensor_data 

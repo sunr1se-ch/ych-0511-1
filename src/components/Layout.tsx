@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  ClipboardList, 
-  History, 
-  Settings, 
-  LogOut, 
-  Menu, 
+import {
+  LayoutDashboard,
+  ClipboardList,
+  History,
+  Settings,
+  LogOut,
+  Menu,
   X,
   Wheat
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { useAppStore } from '../store/appStore';
 
 interface Props {
   children: React.ReactNode;
@@ -18,7 +19,7 @@ interface Props {
 
 const menuItems = [
   { path: '/dashboard', label: '实时状态', icon: LayoutDashboard },
-  { path: '/todos', label: '工单待办', icon: ClipboardList },
+  { path: '/todos', label: '工单待办', icon: ClipboardList, showBadge: true },
   { path: '/history', label: '历史工单', icon: History },
   { path: '/fields', label: '晒场管理', icon: Settings, requireAdmin: true },
 ];
@@ -28,10 +29,50 @@ export default function Layout({ children }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+  const { getTotalPendingCount, refreshAll, fetchWorkOrders } = useAppStore();
+
+  useEffect(() => {
+    fetchWorkOrders('pending');
+    const interval = setInterval(refreshAll, 30000);
+    return () => clearInterval(interval);
+  }, [fetchWorkOrders, refreshAll]);
+
+  const pendingCount = getTotalPendingCount();
 
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const renderMenuItem = (item: typeof menuItems[0]) => {
+    const Icon = item.icon;
+    const isActive = location.pathname === item.path;
+    const isDesktop = window.innerWidth >= 1024;
+
+    return (
+      <Link
+        key={item.path}
+        to={item.path}
+        onClick={() => setSidebarOpen(false)}
+        className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors relative ${
+          isActive
+            ? isDesktop
+              ? 'bg-white/20 text-white'
+              : 'bg-field text-white'
+            : isDesktop
+            ? 'text-white/70 hover:bg-white/10 hover:text-white'
+            : 'text-gray-700 hover:bg-gray-100'
+        }`}
+      >
+        <Icon className="w-5 h-5" />
+        <span>{item.label}</span>
+        {item.showBadge && pendingCount > 0 && (
+          <span className="absolute right-2 inline-flex items-center justify-center px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5">
+            {pendingCount > 99 ? '99+' : pendingCount}
+          </span>
+        )}
+      </Link>
+    );
   };
 
   return (
@@ -51,25 +92,7 @@ export default function Layout({ children }: Props) {
         <div className={`absolute left-0 top-0 bottom-0 w-64 bg-white transform transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="pt-16 pb-4 h-full flex flex-col">
             <nav className="flex-1 px-4 space-y-1">
-              {menuItems.filter(item => !item.requireAdmin || user?.role === 'admin').map(item => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.path;
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                      isActive 
-                        ? 'bg-field text-white' 
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span>{item.label}</span>
-                  </Link>
-                );
-              })}
+              {menuItems.filter(item => !item.requireAdmin || user?.role === 'admin').map(item => renderMenuItem(item))}
             </nav>
             <div className="px-4 py-3 border-t">
               <div className="text-sm text-gray-500 mb-2">{user?.name}</div>
@@ -95,24 +118,7 @@ export default function Layout({ children }: Props) {
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-1">
-          {menuItems.filter(item => !item.requireAdmin || user?.role === 'admin').map(item => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path;
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  isActive 
-                    ? 'bg-white/20 text-white' 
-                    : 'text-white/70 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <Icon className="w-5 h-5" />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+          {menuItems.filter(item => !item.requireAdmin || user?.role === 'admin').map(item => renderMenuItem(item))}
         </nav>
 
         <div className="p-4 border-t border-white/10">
