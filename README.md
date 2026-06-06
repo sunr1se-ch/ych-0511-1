@@ -1,57 +1,270 @@
-# React + TypeScript + Vite
+# 苏北合作社晒谷场湿度监控与翻粮工单系统
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+用于实时监控晒谷场粮堆表层湿度，自动触发翻粮工单，实现晒场数字化管理的现场可用小系统。
 
-Currently, two official plugins are available:
+## 功能特点
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- 🌾 **晒场管理**：支持晒场信息维护，可设置各晒场翻粮湿度上限
+- 💧 **实时监控**：每10分钟自动采集湿度数据，实时展示各晒场状态
+- ⚠️ **自动预警**：连续20分钟湿度超上限自动开立翻粮工单
+- 📋 **工单管理**：待办工单、完成登记、历史查询全流程管理
+- 📱 **响应式设计**：支持桌面端、平板端、移动端访问
+- 🐳 **Docker 单机部署**：一键启动，无需复杂配置
 
-## Expanding the ESLint configuration
+## 快速开始
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### 方式一：Docker Compose 部署（推荐）
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```bash
+# 1. 克隆或下载项目
+cd ych-0511-1
+
+# 2. 构建前端
+npm install
+npm run build
+
+# 3. 启动服务
+docker-compose up -d
+
+# 4. 访问系统
+# 浏览器打开 http://localhost:8080
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### 方式二：本地开发运行
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```bash
+# 1. 安装依赖
+npm install
 
-export default tseslint.config({
-  extends: [
-    // other configs...
-    // Enable lint rules for React
-    reactX.configs['recommended-typescript'],
-    // Enable lint rules for React DOM
-    reactDom.configs.recommended,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+# 2. 同时启动前端和后端
+npm run dev
+
+# 3. 访问系统
+# 前端: http://localhost:5173
+# 后端API: http://localhost:3001
 ```
+
+## 演示账号
+
+系统首次启动会自动初始化演示数据，包含3个晒场、历史工单记录。
+
+| 角色 | 用户名 | 密码 |
+|------|--------|------|
+| 管理员 | admin | admin123 |
+| 作业员 | operator1 | operator123 |
+
+## 角色使用说明
+
+### 👨‍💼 管理员使用指南
+
+**1. 登录系统**
+- 访问系统首页，输入管理员账号密码登录
+
+**2. 晒场管理**
+- 点击左侧导航「晒场管理」
+- 可新增、编辑、删除晒场信息
+- 设置每个晒场的编号、面积、翻粮湿度上限（通常为65-75%）
+
+**3. 查看实时状态**
+- 点击「实时状态」查看所有晒场当前湿度
+- 绿色=正常，黄色=预警（接近上限），红色=超标
+- 点击晒场卡片查看近2小时湿度趋势图
+
+**4. 查看所有工单**
+- 点击「工单待办」查看待处理工单
+- 点击「历史工单」按条件查询历史记录
+
+### 👷 作业员使用指南
+
+**1. 登录系统**
+- 使用作业员账号登录
+
+**2. 查看待办工单**
+- 登录后自动进入「实时状态」页面
+- 点击左侧「工单待办」查看需要处理的翻粮任务
+- 超标超过1小时的工单会标记「紧急」
+
+**3. 处理工单**
+- 点击工单卡片的「登记完成」按钮
+- 填写实际作业时长（分钟）
+- 填写作业备注（如"翻粮完成，湿度已下降"）
+- 可选择上传现场作业照片（可选）
+- 点击「确认完成」关闭工单
+
+**4. 查看历史记录**
+- 点击「历史工单」查询已完成的工单
+- 可按晒场、状态、日期范围筛选
+- 点击「详情」查看工单完整信息
+
+## 业务规则
+
+### 自动开单规则
+
+1. **探头上报频率**：每10分钟上报一次粮堆表层湿度
+2. **超标判定条件**：连续3次上报（覆盖20分钟）湿度均高于该晒场上限
+3. **防重复开单**：同一晒场在同一天内已有未关闭工单时，不重复开立
+4. **工单状态**：待处理 → 处理中 → 已完成
+
+### 湿度状态说明
+
+| 状态 | 颜色 | 说明 |
+|------|------|------|
+| 正常 | 绿色 | 湿度低于上限5%以上 |
+| 预警 | 黄色 | 湿度在上下限5%区间内 |
+| 超标 | 红色 | 湿度超过上限 |
+
+## 系统架构
+
+```
+┌─────────────────────────────────────────────────────┐
+│                     客户端浏览器                      │
+└─────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────┐
+│                Docker Compose 主机                   │
+│  ┌─────────────┐     ┌──────────────────────────┐   │
+│  │  Nginx      │────▶│  Express API 服务        │   │
+│  │  (前端)     │     │  - 业务逻辑             │   │
+│  └─────────────┘     │  - 定时任务(探头模拟)   │   │
+│                      │  - SQLite 数据库        │   │
+│                      └──────────────────────────┘   │
+└─────────────────────────────────────────────────────┘
+```
+
+## 技术栈
+
+- **前端**：React 18 + TypeScript + Vite + TailwindCSS + Zustand + Recharts
+- **后端**：Express 4 + TypeScript + SQL.js (SQLite)
+- **部署**：Docker Compose
+- **认证**：JWT Token
+
+## API 接口
+
+### 认证
+- `POST /api/auth/login` - 登录获取Token
+- `GET /api/auth/me` - 获取当前用户信息
+
+### 晒场管理
+- `GET /api/fields` - 获取晒场列表（含实时状态）
+- `GET /api/fields/:id` - 获取晒场详情
+- `POST /api/fields` - 新增晒场（管理员）
+- `PUT /api/fields/:id` - 更新晒场（管理员）
+- `DELETE /api/fields/:id` - 删除晒场（管理员）
+
+### 探头数据
+- `GET /api/sensor-data?fieldId=:id&hours=:hours` - 获取历史数据
+- `POST /api/sensor-data` - 探头上报数据
+
+### 工单管理
+- `GET /api/work-orders` - 获取工单列表
+- `GET /api/work-orders?status=pending` - 获取待办工单
+- `GET /api/work-orders/:id` - 获取工单详情
+- `POST /api/work-orders/:id/complete` - 完成登记
+
+## 演示流程
+
+系统启动后预置了完整的演示场景：
+
+1. **初始状态**：3个晒场（A-01、A-02、B-01）
+2. **模拟超标**：系统自动模拟1号晒场湿度逐步上升
+3. **自动开单**：当连续3次超标时自动创建工单
+4. **工单处理**：作业员登录后可在待办中看到工单
+5. **完成登记**：作业员完成作业后登记，工单关闭
+6. **历史查询**：可在历史工单中查看完整流程
+
+## 数据目录
+
+- `./data/` - SQLite数据库文件
+- `./uploads/` - 作业照片上传目录
+
+**注意**：以上目录会自动创建，删除目录会重置所有数据。
+
+## 常用命令
+
+```bash
+# 启动服务
+docker-compose up -d
+
+# 停止服务
+docker-compose stop
+
+# 重启服务
+docker-compose restart
+
+# 查看日志
+docker-compose logs -f
+
+# 重新构建
+docker-compose up -d --build
+
+# 查看服务状态
+docker-compose ps
+```
+
+## 开发说明
+
+```bash
+# 安装依赖
+npm install
+
+# 类型检查
+npm run check
+
+# 代码检查
+npm run lint
+
+# 构建生产版本
+npm run build
+
+# 开发模式运行
+npm run dev        # 同时启动前端(5173)和后端(3001)
+npm run client:dev # 仅前端
+npm run server:dev # 仅后端
+```
+
+## 目录结构
+
+```
+ych-0511-1/
+├── api/                    # 后端代码
+│   ├── controllers/       # 控制器
+│   ├── middleware/        # 中间件
+│   ├── models/            # 数据模型
+│   ├── routes/            # API路由
+│   ├── services/          # 业务逻辑
+│   └── tasks/             # 定时任务
+├── src/                    # 前端代码
+│   ├── components/        # 组件
+│   ├── pages/             # 页面
+│   ├── store/             # 状态管理
+│   └── utils/             # 工具函数
+├── shared/                 # 前后端共享类型
+├── migrations/            # 数据库初始化脚本
+├── docker/                # Docker配置
+├── data/                  # 数据库文件（运行时生成）
+├── uploads/               # 上传文件（运行时生成）
+├── docker-compose.yml     # Docker Compose配置
+└── README.md
+```
+
+## 常见问题
+
+**Q: 如何修改湿度上限？**
+A: 管理员登录后，在「晒场管理」页面点击编辑，修改湿度上限即可。
+
+**Q: 如何清除所有数据重新开始？**
+A: 停止服务后删除 `data/` 目录，再重新启动即可。
+
+**Q: 探头数据是真实的吗？**
+A: 本系统内置了模拟数据用于演示，实际使用时可对接真实的湿度探头设备，调用 `POST /api/sensor-data` 接口上报数据。
+
+**Q: 如何接入真实探头设备？**
+A: 探头设备按照10分钟一次的频率，调用 `/api/sensor-data` 接口上报 `fieldId`（晒场ID）和 `humidity`（湿度值）即可，系统会自动处理后续逻辑。
+
+## 技术支持
+
+如有问题，请检查：
+1. Docker / Docker Compose 是否已正确安装
+2. 端口 8080 是否被占用
+3. `data/` 和 `uploads/` 目录是否有写入权限
